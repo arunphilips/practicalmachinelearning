@@ -1,0 +1,142 @@
+---
+title: "Exercise Analysis - 2 (Machine Learning)"
+author: "Arun"
+date: "August 3, 2016"
+output: html_document
+---
+
+##Summary
+The goal of the analysis is to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants, to predict the manner in which they did the exercise.
+
+##Background
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+##Data
+
+The training data for this project are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+The data for this project come from this source: http://groupware.les.inf.puc-rio.br/har. If you use the document you create for this class for any purpose please cite them as they have been very generous in allowing their data to be used for this kind of assignment.
+
+##Prediction Goal
+The goal of your project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set. You may use any of the other variables to predict with. 
+
+##How was the model built?
+The dataset was reduced by variable reduction and cross validation.
+A random forest model was chosen since it has high accuracy.
+It was first applied to a subset of original training set, and validated with another subest of the same training set.
+
+Finally, the model is applied on the testing set to get 20 predictions.
+
+#Expected out of sample error
+The expected out-of-sample error will correspond to the quantity: 1-accuracy in the cross-validation data. Accuracy is the proportion of correct classified observation over the total sample in the subTesting data set. Expected accuracy is the expected accuracy in the out-of-sample data set (i.e. original testing data set). Thus, the expected value of the out-of-sample error will correspond to the expected number of missclassified observations/total observations in the Test data set, which is the quantity: 1-accuracy found from the cross-validation data set.
+
+
+##Getting Data
+```{r read, eval=T}
+train<-read.csv("pml-training.csv", na.strings = c("NA","#DIV/0!", ""))
+test<-read.csv("pml-testing.csv", na.strings = c("NA","#DIV/0!", ""))
+```
+
+##Cross Validation - Splitting training set into two
+```{r split, eval=T}
+library(caret)
+inTrain<-createDataPartition(train$classe, p=0.7, list = FALSE)
+mytrain<-train[inTrain,]
+mytest<-train[-inTrain,]
+```
+
+#Cleaning Data
+```{r clean}
+trainingV3 <- mytrain #creating another subset to iterate in loop
+for(i in 1:length(mytrain)) { #for every column in the training dataset
+  if( sum( is.na( mytrain[, i] ) ) /nrow(mytrain) >= .6 ) { #if n?? NAs > 60% of total observations
+    for(j in 1:length(trainingV3)) {
+      if( length( grep(names(mytrain[i]), names(trainingV3)[j]) ) ==1)  { #if the columns are the same:
+        trainingV3 <- trainingV3[ , -j] #Remove that column
+      }   
+    } 
+  }
+}
+
+trainingV3<-trainingV3[,-1]
+mytrain<-trainingV3
+
+
+
+trainingV4 <- mytest #creating another subset to iterate in loop
+for(i in 1:length(mytest)) { #for every column in the training dataset
+  if( sum( is.na( mytest[, i] ) ) /nrow(mytest) >= .6 ) { #if n?? NAs > 60% of total observations
+    for(j in 1:length(trainingV4)) {
+      if( length( grep(names(mytest[i]), names(trainingV4)[j]) ) ==1)  { #if the columns are the same:
+        trainingV4 <- trainingV4[ , -j] #Remove that column
+      }   
+    } 
+  }
+}
+
+trainingV4<-trainingV4[,-1]
+mytest<-trainingV4
+
+
+trainingV5 <- test #creating another subset to iterate in loop
+for(i in 1:length(test)) { #for every column in the training dataset
+  if( sum( is.na( test[, i] ) ) /nrow(test) >= .6 ) { #if n?? NAs > 60% of total observations
+    for(j in 1:length(trainingV5)) {
+      if( length( grep(names(test[i]), names(trainingV5)[j]) ) ==1)  { #if the columns are the same:
+        trainingV5 <- trainingV5[ , -j] #Remove that column
+      }   
+    } 
+  }
+}
+
+trainingV5<-trainingV5[,-1]
+test<-trainingV5
+
+
+#coercion - if same factor types for RF algo
+for (i in 1:length(test) ) {
+  for(j in 1:length(mytrain)) {
+    if( length( grep(names(mytrain[i]), names(test)[j]) ) ==1)  {
+      class(test[j]) <- class(mytrain[i])
+    }      
+  }      
+}
+```
+
+
+##Random forest - Reproducibility
+```{r model, eval=T, cache=TRUE}
+set.seed(333)
+library(caret)
+library(e1071)
+library(randomForest)
+
+rfmod<-randomForest(classe~., data=mytrain)
+rfpred<-predict(rfmod, mytest, type="class")
+
+#check accuracy of RF algo on validation set
+confusionMatrix(rfpred, mytest$classe)
+```
+```{r final, eval=F}
+#Final predictions on testing set
+rfpred2<-predict(rfmod, test, type="class")
+```
+
+##Writing the files out
+```{r files, eval=F, cache=TRUE}
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+
+pml_write_files(rfpred2)
+```
